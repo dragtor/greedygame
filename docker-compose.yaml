@@ -1,7 +1,9 @@
-version: '3'
+version: "3"
 services:
-  app: 
+  app:
     container_name: greedygame
     build: .
     ports:
-      - '8080:8080'
+      - "8080:8080"
+    environment:
+      - SERVICE_PORT=8080

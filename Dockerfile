@@ -10,9 +10,6 @@ RUN go mod download
 
 COPY . .
 
-RUN pwd
-RUN ls
-
 RUN CGO_ENABLED=0 GOOS=linux go build -o main cmd/restapplication/main.go
 
 FROM alpine:latest

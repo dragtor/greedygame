@@ -2,8 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 
 	"github.com/dragtor/greedygame/pkg/inmemorytree"
 	"github.com/gorilla/mux"
@@ -133,6 +137,15 @@ func (t *App) asyncStoreInMemtree() {
 	}
 }
 
+var (
+	servicePort *string
+)
+
+func init() {
+	servicePort = flag.String("p", strings.TrimSpace(os.Getenv("SERVICE_PORT")), "service port")
+	flag.Parse()
+}
+
 func main() {
 	log.Printf("Initializing server\n")
 	r := mux.NewRouter()
@@ -142,6 +155,6 @@ func main() {
 	go t.asyncStoreInMemtree()
 	r.HandleFunc("/v1/insert", t.insertData)
 	r.HandleFunc("/v1/query", t.getData)
-	log.Printf("Server listening on port :8080")
-	http.ListenAndServe(":8080", r)
+	log.Printf("Server listening on port : %s", *servicePort)
+	http.ListenAndServe(fmt.Sprintf(":%s", *servicePort), r)
 }
