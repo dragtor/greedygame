@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/dragtor/greedygame/pkg/inmemorytree"
@@ -10,6 +11,7 @@ import (
 
 type App struct {
 	InMemTree *inmemorytree.InMemTree
+	Carrier   chan inmemorytree.Record
 }
 
 type InsertHTTPRequest struct {
@@ -28,6 +30,21 @@ type QueryHTTPRequest struct {
 		Key string `json:"key"`
 		Val string `json:"val"`
 	} `json:"dim"`
+}
+
+type QueryResultHTTPResponse struct {
+	Dim     []KVResponse  `json:"dim"`
+	Metrics []MKVResponse `json:"metrics"`
+}
+
+type KVResponse struct {
+	Key string `json:"key"`
+	Val string `json:"val"`
+}
+
+type MKVResponse struct {
+	Key string `json:"key"`
+	Val int    `json:"val"`
 }
 
 func respondWithError(w http.ResponseWriter, code int, message string) {
@@ -60,39 +77,71 @@ func convertHTTPQueryRequestToMemTreeQueryRequest(req QueryHTTPRequest) inmemory
 	return dimension
 }
 
+func convertTreeQueryResultToHTTPResponse(qryRes inmemorytree.QueryResult) QueryResultHTTPResponse {
+	var qryresult QueryResultHTTPResponse
+	for _, qr := range qryRes.Dimension {
+		qryresult.Dim = append(qryresult.Dim, KVResponse{Key: qr.Key, Val: qr.Value})
+	}
+	for _, qr := range qryRes.Res {
+		qryresult.Metrics = append(qryresult.Metrics, MKVResponse{Key: qr.Key, Val: qr.Value})
+	}
+	return qryresult
+}
+
 func (t *App) insertData(w http.ResponseWriter, r *http.Request) {
 	var p InsertHTTPRequest
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&p); err != nil {
+		log.Printf("Error : Failed to decode request data ")
 		respondWithError(w, http.StatusBadRequest, "Invalid request payload")
 		return
 	}
 	defer r.Body.Close()
 	rec := convertHTTPRequestToInMemTreeRequest(p)
-	t.InMemTree.Insert(rec)
+	log.Printf("Pushed data to channel")
+	t.Carrier <- rec
 	respondWithJSON(w, http.StatusOK, map[string]interface{}{"status": "success"})
 }
 func (t *App) getData(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Received request to fetch query")
 	var p QueryHTTPRequest
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&p); err != nil {
+		log.Printf("Error : Failed to decode request data ")
 		respondWithError(w, http.StatusBadRequest, "Invalid request payload")
 		return
 	}
 	defer r.Body.Close()
 	reqdim := convertHTTPQueryRequestToMemTreeQueryRequest(p)
+	log.Printf("Retriving data from data store")
+
 	res, err := t.InMemTree.Query(reqdim)
-	if err != nil {
-		panic(err)
+	if err == inmemorytree.ERROR_VALUE_NOT_PRESENT {
+		respondWithJSON(w, http.StatusNotFound, map[string]string{"status": "Error: Value Not Present"})
+		return
 	}
-	respondWithJSON(w, http.StatusOK, res)
+	responseData := convertTreeQueryResultToHTTPResponse(*res)
+	respondWithJSON(w, http.StatusOK, responseData)
+}
+
+func (t *App) asyncStoreInMemtree() {
+	for {
+		select {
+		case rec := <-t.Carrier:
+			t.InMemTree.Insert(rec)
+		}
+	}
 }
 
 func main() {
+	log.Printf("Initializing server\n")
 	r := mux.NewRouter()
 	tree := inmemorytree.Tree()
-	t := App{InMemTree: tree}
+	carrier := make(chan inmemorytree.Record)
+	t := App{InMemTree: tree, Carrier: carrier}
+	go t.asyncStoreInMemtree()
 	r.HandleFunc("/v1/insert", t.insertData)
 	r.HandleFunc("/v1/query", t.getData)
-	http.ListenAndServe(":8091", r)
+	log.Printf("Server listening on port :8080")
+	http.ListenAndServe(":8080", r)
 }

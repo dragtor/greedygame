@@ -108,6 +108,16 @@ func (t *InMemTree) Insert(r Record) error {
 	return t.insert(r)
 }
 
+func (t *InMemTree) safeIncrementMetrics(f Incrementer, params Metrics) {
+	t.mu.Lock()
+	f.incrementMetrics(params)
+	t.mu.Unlock()
+}
+
+type Incrementer interface {
+	incrementMetrics(params Metrics)
+}
+
 func (n *ANode) incrementMetrics(params Metrics) {
 	for _, m := range params {
 		n.Metrics[m.Key] += m.Value
@@ -117,17 +127,17 @@ func (n *ANode) incrementMetrics(params Metrics) {
 func (t *InMemTree) insert(r Record) error {
 	sort.Sort(r.Dimensions)
 	currNode := t.RootNode
-	currNode.incrementMetrics(r.Metrics)
+	t.safeIncrementMetrics(currNode, r.Metrics)
 	for _, d := range r.Dimensions {
 		child, err := currNode.childNodeOfDimension(d.Value)
 		if err == ERROR_VALUE_NOT_PRESENT {
 			node := ANodeFactory(d.Key)
 			currNode.ChildNodeMap[d.Value] = node
-			node.incrementMetrics(r.Metrics)
+			t.safeIncrementMetrics(node, r.Metrics)
 			currNode = node
 			continue
 		}
-		child.incrementMetrics(r.Metrics)
+		t.safeIncrementMetrics(child, r.Metrics)
 		currNode = child
 	}
 	return nil
