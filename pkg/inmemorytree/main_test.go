@@ -1,4 +1,4 @@
-package main
+package inmemorytree
 
 import (
 	"fmt"
@@ -51,7 +51,6 @@ func TestInsert(t *testing.T) {
 	tc.Insert(r1)
 	tc.Insert(r2)
 	tc.Insert(r3)
-	// fmt.Println(tc)
 }
 
 func TestQuery(t *testing.T) {
@@ -103,5 +102,4 @@ func TestQuery(t *testing.T) {
 	query := Dimension{VarKeyValue{Key: "country", Value: "USA"}} //, VarKeyValue{Key: "device", Value: "web"}}
 	rs, _ := tc.Query(query)
 	fmt.Println(rs)
-
 }

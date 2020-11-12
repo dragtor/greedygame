@@ -1,4 +1,4 @@
-package main
+package inmemorytree
 
 import (
 	"encoding/json"
